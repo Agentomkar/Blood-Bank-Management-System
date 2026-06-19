@@ -39,8 +39,10 @@ If users ask about medical conditions or emergency situations, advise them to co
 Keep responses concise and helpful.`
     });
 
-    // Build chat history for the conversation
-    const history = (conversationHistory || []).map((msg: any) => ({
+    // Build chat history for the conversation, ensuring the first message is from the user
+    const rawHistory = conversationHistory || [];
+    const firstUserIndex = rawHistory.findIndex((msg: any) => msg.role === "user");
+    const history = (firstUserIndex !== -1 ? rawHistory.slice(firstUserIndex) : []).map((msg: any) => ({
       role: msg.role === "user" ? "user" : "model",
       parts: [{ text: msg.content }],
     }));
