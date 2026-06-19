@@ -352,8 +352,10 @@ export default function AIChatbot() {
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
             className="fixed bottom-28 right-8 z-[100] w-[420px] max-w-[calc(100vw-2rem)] h-[620px] max-h-[78vh] rounded-3xl overflow-hidden flex flex-col"
             style={{
-              background: "rgba(10, 10, 10, 0.95)",
-              backdropFilter: "blur(40px)",
+              background: "rgba(10, 10, 10, 0.98)",
+              backdropFilter: "blur(12px)",
+              transform: "translate3d(0,0,0)",
+              willChange: "transform, opacity",
               border: "1px solid rgba(255,255,255,0.06)",
               boxShadow: "0 25px 80px rgba(0,0,0,0.5), 0 0 40px rgba(139,0,0,0.1)",
             }}
@@ -382,7 +384,7 @@ export default function AIChatbot() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 scrollbar-thin">
+            <div className="flex-1 overflow-y-auto overscroll-contain px-5 py-4 space-y-4 scrollbar-thin">
               {messages.map((msg, i) => (
                 <motion.div
                   key={`${msg.timestamp.toISOString()}-${i}`}
