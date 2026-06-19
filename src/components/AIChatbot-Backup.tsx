@@ -93,6 +93,11 @@ function startsRegistration(text: string) {
   );
 }
 
+// Global scope/module-level variables to track active registration session
+let isRegisteringGlobal = false;
+let currentRegStepGlobal: number | null = null;
+let regFormGlobal: DonorForm = { ...emptyForm };
+
 function validateStep(step: Step, value: string) {
   if (!value.trim()) return "Please enter a value so I can continue.";
   if (step === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
@@ -137,7 +142,7 @@ export default function AIChatbot() {
     {
       role: "assistant",
       content:
-        "Hi, I am LifeStream AI powered by Google Generative AI. I can register you as a donor step by step, check eligibility, answer donation questions, help with reminders, find blood banks, or guide emergency requests.",
+        "Hi, I am LifeStream AI. I can register you as a donor step by step, check eligibility, answer donation questions, help with reminders, find blood banks, or guide emergency requests.",
       timestamp: new Date(),
     },
   ]);
@@ -146,7 +151,6 @@ export default function AIChatbot() {
   const [activeStep, setActiveStep] = useState<number | null>(null);
   const [form, setForm] = useState<DonorForm>(emptyForm);
   const [profile, setProfile] = useState<DonorProfile | null>(null);
-  const [useGoogleAI, setUseGoogleAI] = useState(true); // Toggle between Google AI and rule-based
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -202,29 +206,60 @@ export default function AIChatbot() {
         ...prev,
         {
           role: "assistant",
-          content: `Excellent! Your donor profile has been registered.\n\nName: ${result.firstName} ${result.lastName}\nDonor ID: ${result.donorId}\nBlood Group: ${result.bloodGroup}\nStatus: ${result.status}\n\nThank you for joining the LifeStream community. You will save lives!`,
+          content: `Registration completed successfully. Welcome to LifeStream Blood Network. Your Donor ID is ${result.donorId}, and your status is ${result.status}.`,
           timestamp: new Date(),
         },
       ]);
-      setIsTyping(false);
-      soundEngine.notification();
-      setActiveStep(null);
-      setForm(emptyForm);
     } catch (error) {
-      const errorMsg =
-        error instanceof ApiResponseError
-          ? error.message
-          : "Registration failed. Please try again.";
-      addAssistant(errorMsg, 450);
+      if (
+        error instanceof ApiResponseError &&
+        error.response.status === 409
+      ) {
+        const data = error.data as DonorRegistrationError;
+        const donor = data.donor;
+        if (donor) {
+          setProfile(donor);
+          window.localStorage.setItem(
+            "lifestreamDonorProfile",
+            JSON.stringify(donor)
+          );
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: "assistant",
+              content: `This email or phone is already registered. Here is the donor profile: ${donor.firstName} ${donor.lastName}, Donor ID ${donor.donorId}, Status ${donor.status}.`,
+              timestamp: new Date(),
+            },
+          ]);
+          return;
+        }
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            error instanceof Error
+              ? error.message
+              : "I could not complete registration right now.",
+          timestamp: new Date(),
+        },
+      ]);
+    } finally {
+      setIsTyping(false);
+      setActiveStep(null);
+      soundEngine.notification();
     }
   };
 
-  const continueRegistration = (normalized: string) => {
+  const continueRegistration = (value: string) => {
     if (activeStep === null) return;
 
     const step = steps[activeStep];
+    const normalized =
+      step.key === "bloodGroup" ? value.trim().toUpperCase() : value.trim();
     const error = validateStep(step.key, normalized);
-
     if (error) {
       addAssistant(error, 450);
       return;
@@ -243,45 +278,6 @@ export default function AIChatbot() {
     submitRegistration(nextForm);
   };
 
-  const sendMessageWithGoogleAI = async (text: string) => {
-    setIsTyping(true);
-    try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: text,
-          conversationHistory: messages.map((msg) => ({
-            role: msg.role,
-            content: msg.content,
-          })),
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to get response from AI");
-      }
-
-      const data = await response.json();
-      
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: data.message, timestamp: new Date() },
-      ]);
-      setIsTyping(false);
-      soundEngine.notification();
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : "AI service error";
-      addAssistant(
-        `Sorry, I encountered an issue: ${errorMsg}. Please try again or use the form options.`,
-        450
-      );
-    }
-  };
-
   const sendMessage = (text?: string) => {
     const msg = (text || input).trim();
     if (!msg || isTyping) return;
@@ -293,24 +289,17 @@ export default function AIChatbot() {
     ]);
     setInput("");
 
-    // During registration, use rule-based logic
     if (activeStep !== null) {
       continueRegistration(msg);
       return;
     }
 
-    // Check if starting registration
     if (startsRegistration(msg)) {
       beginRegistration();
       return;
     }
 
-    // Use Google AI if enabled, otherwise fall back to rules
-    if (useGoogleAI) {
-      sendMessageWithGoogleAI(msg);
-    } else {
-      addAssistant(featureResponse(msg));
-    }
+    addAssistant(featureResponse(msg));
   };
 
   const currentHint = activeStep === null ? "Ask LifeStream AI..." : steps[activeStep].hint;
@@ -369,17 +358,15 @@ export default function AIChatbot() {
                   </div>
                   <div className="flex items-center gap-1.5 text-xs text-white/40">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    {useGoogleAI ? "Google AI" : "Assistant"}
+                    Donor assistant
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                {profile && (
-                  <div className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-300">
-                    Registered
-                  </div>
-                )}
-              </div>
+              {profile && (
+                <div className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs text-emerald-300">
+                  Registered
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 scrollbar-thin">
@@ -398,7 +385,7 @@ export default function AIChatbot() {
                       <User className="w-4 h-4 text-white/60" />
                     )}
                   </div>
-                  <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${msg.role === "assistant" ? "bg-white/[0.03] border border-white/5 text-white/80 rounded-tl-md" : "bg-crimson-600/20 border border-crimson-600/10 text-white/90 rounded-tr-md"}`}>
+                  <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${msg.role === "assistant" ? "bg-white/[0.03] border border-white/5 text-white/80 rounded-tl-md" : "bg-crimson-600/20 border border-crimson-600/10 text-white/90 rounded-tr-md"}`}>
                     {msg.content}
                   </div>
                 </motion.div>

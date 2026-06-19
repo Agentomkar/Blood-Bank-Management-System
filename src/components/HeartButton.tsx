@@ -3,7 +3,7 @@ import { Heart } from "lucide-react";
 import { loadFull } from "tsparticles";
 
 import type { ISourceOptions } from "@tsparticles/engine";
-import Particles, { initParticlesEngine } from "@tsparticles/react";
+import Particles, { ParticlesProvider, useParticlesProvider } from "@tsparticles/react";
 import { cn } from "@/lib/utils";
 
 const options: ISourceOptions = {
@@ -108,17 +108,16 @@ const options: ISourceOptions = {
   ],
 };
 
-export const Component = () => {
+const HeartButtonContent = () => {
+  const { loaded } = useParticlesProvider();
   const [particleState, setParticlesReady] = useState<"loaded" | "ready">();
   const [isHovering, setIsHovering] = useState(false);
 
   useEffect(() => {
-    initParticlesEngine(async (engine) => {
-      await loadFull(engine);
-    }).then(() => {
+    if (loaded) {
       setParticlesReady("loaded");
-    });
-  }, []);
+    }
+  }, [loaded]);
 
   const modifiedOptions = useMemo(() => {
     options.autoPlay = isHovering;
@@ -160,7 +159,7 @@ export const Component = () => {
           strokeWidth={1.5}
         />
       </div>
-      {!!particleState && (
+      {loaded && !!particleState && (
         <Particles
           id="heart-particles"
           className={cn("pointer-events-none absolute -bottom-4 -left-4 -right-4 -top-4 z-0 opacity-0 transition-opacity", {
@@ -175,3 +174,14 @@ export const Component = () => {
     </button>
   );
 };
+
+export const Component = () => {
+  return (
+    <ParticlesProvider init={async (engine) => { await loadFull(engine); }}>
+      <HeartButtonContent />
+    </ParticlesProvider>
+  );
+};
+
+export const HeartButton = Component;
+export default Component;
