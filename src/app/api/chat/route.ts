@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
     // Initialize the model
     const model = genAI.getGenerativeModel({ 
-      model: process.env.GOOGLE_AI_MODEL || "gemini-flash-latest",
+      model: process.env.GOOGLE_AI_MODEL || "gemini-2.0-flash",
       systemInstruction: `You are LifeStream AI, the official professional medical assistant for the LifeStream Blood Bank platform. 
 Your primary objective is to assist users with blood donation management, registration, and donor education with the highest standard of professionalism, accuracy, and care.
 
