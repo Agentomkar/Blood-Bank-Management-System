@@ -149,6 +149,9 @@ export const pool = databaseUrl
   ? globalForDb.__arenaNextJsPostgresqlPool ??
     new Pool({
       connectionString: databaseUrl,
+      ssl: {
+        rejectUnauthorized: false,
+      },
     })
   : undefined;
 
