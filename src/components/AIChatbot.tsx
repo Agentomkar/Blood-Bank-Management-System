@@ -273,7 +273,7 @@ export default function AIChatbot() {
     submitRegistration(nextForm);
   };
 
-  const sendMessage = (text?: string) => {
+  const sendMessage = async (text?: string) => {
     const msg = (text || input).trim();
     if (!msg || isTyping) return;
 
@@ -294,7 +294,33 @@ export default function AIChatbot() {
       return;
     }
 
-    addAssistant(featureResponse(msg));
+    // Use Groq AI for intelligent responses
+    setIsTyping(true);
+    try {
+      const conversationHistory = [...messages, { role: "user" as const, content: msg }].slice(-6);
+      const res = await fetchJson<{ reply: string }>("/api/ai", {
+        label: "LifeStream AI chatbot",
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: conversationHistory.map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+        }),
+      });
+
+      setIsTyping(false);
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: res.reply, timestamp: new Date() },
+      ]);
+      soundEngine.notification();
+    } catch {
+      // Fallback to rule-based response if AI fails
+      setIsTyping(false);
+      addAssistant(featureResponse(msg));
+    }
   };
 
   const currentHint = activeStep === null ? "Ask LifeStream AI..." : steps[activeStep].hint;
